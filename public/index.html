@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Harness | セルフホスト型・完全0円 電子契約＆暗号監査エンジン</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
+    <div>
+      <span class="text-xs font-bold text-sky-400 tracking-widest uppercase">Web Crypto SHA-256 E-Signature Engine</span>
+      <h1 class="text-xl font-bold text-white">Sign Harness Portal</h1>
+    </div>
+    <button onclick="createSampleContract()" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow">
+      ＋ 新規契約書（SHA-256ハッシュ付与）を発行
+    </button>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-6 space-y-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h2 class="font-bold text-base mb-4">📜 電子契約書・合意ステータス一覧</h2>
+        <div id="contracts-list" class="space-y-4"></div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h2 class="font-bold text-base mb-4">🔐 暗号署名・監査証跡検証結果</h2>
+        <div id="verification-panel" class="text-xs text-slate-400 space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
+          契約書の「真正性検証」ボタンを押すと、SHA-256ハッシュ再計算およびタイムスタンプ署名シールの検証結果が表示されます。
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    async function loadContracts() {
+      const res = await fetch('/api/contracts');
+      const data = await res.json();
+      const container = document.getElementById('contracts-list');
+
+      container.innerHTML = data.contracts.map(c => `
+        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="font-bold text-sm text-white">${c.title}</span>
+              <span class="ml-2 text-xs px-2.5 py-0.5 rounded-full ${c.status === 'signed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${c.status}</span>
+            </div>
+            <div class="flex space-x-2">
+              ${c.status === 'pending_signature' ? `
+                <button onclick="signContract('${c.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">電子署名を実行</button>
+              ` : ''}
+              <button onclick="verifyContract('${c.id}')" class="bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700">真正性検証</button>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400">相手方: ${c.counterparty_name} (${c.counterparty_email})</p>
+          <p class="text-[11px] font-mono text-slate-500 truncate">Document SHA-256: ${c.document_sha256}</p>
+          ${c.signature_seal_hash ? `<p class="text-[11px] font-mono text-emerald-400 truncate">Signature Seal: ${c.signature_seal_hash}</p>` : ''}
+        </div>
+      `).join('');
+    }
+
+    async function signContract(id) {
+      await fetch(`/api/contracts/${id}/sign`, { method: 'POST' });
+      await loadContracts();
+      await verifyContract(id);
+    }
+
+    async function verifyContract(id) {
+      const res = await fetch(`/api/contracts/${id}/verify`);
+      const data = await res.json();
+      const v = data.verification;
+      document.getElementById('verification-panel').innerHTML = `
+        <div class="text-emerald-400 font-bold text-sm mb-2">✓ 改ざん検知なし (Tamper-Free: ${v.tamper_free_verified})</div>
+        <div><strong>契約ID:</strong> ${v.contract_id}</div>
+        <div><strong>タイトル:</strong> ${v.title}</div>
+        <div><strong>ステータス:</strong> ${v.status}</div>
+        <div class="break-all font-mono text-[10px] text-slate-300 mt-2"><strong>記録SHA-256:</strong><br>${v.recorded_sha256}</div>
+        <div class="break-all font-mono text-[10px] text-slate-300"><strong>再計算SHA-256:</strong><br>${v.recomputed_sha256}</div>
+        <div class="break-all font-mono text-[10px] text-emerald-300"><strong>署名シール:</strong><br>${v.signature_seal_hash || '未署名'}</div>
+      `;
+    }
+
+    async function createSampleContract() {
+      await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'マーケティング支援業務委託契約書',
+          counterparty_name: '株式会社グロースパートナーズ 代表取締役 吉田 誠',
+          counterparty_email: 'yoshida@growth-p.example.com',
+          content_body: '第1条 甲は乙に対しSNS運用およびLINE自動化導入支援業務を委託する。\n第2条 契約期間は2026年11月1日より1年間とし、月額報酬は150,000円（税別）とする。'
+        })
+      });
+      await loadContracts();
+    }
+
+    loadContracts();
+  </script>
+</body>
+</html>

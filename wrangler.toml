@@ -1,0 +1,16 @@
+name = "sign-harness"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sign-db"
+database_id = "your-database-id-here"
+
+[vars]
+ORGANIZATION_NAME = "Harness Legal & Corp"
+SIGNING_SECRET = "default-edge-cryptographic-signing-secret-key"
